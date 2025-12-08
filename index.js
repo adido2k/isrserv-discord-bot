@@ -1,17 +1,17 @@
 // index.js
-require("dotenv").config();
+require('dotenv').config();
 const {
   Client,
   GatewayIntentBits,
   Partials,
   Events,
-} = require("discord.js");
+} = require('discord.js');
 
 const {
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
-} = require("./whmcs");
+} = require('./whmcs');
 
 const client = new Client({
   intents: [
@@ -23,12 +23,7 @@ const client = new Client({
 });
 
 const GUILD_ID = process.env.GUILD_ID;
-const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID; // רול ללקוחות מאומתים
-
-// לוג כללי של שגיאות לא מטופלות כדי שלא יפיל את הבוט בשקט
-process.on("unhandledRejection", (reason) => {
-  console.error("UNHANDLED REJECTION:", reason);
-});
+const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID; // רול שיקבל לקוח מאומת
 
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -38,54 +33,44 @@ client.once(Events.ClientReady, () => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  console.log(
-    `↪ Slash command /${interaction.commandName} from ${interaction.user.tag}`
-  );
-
   try {
-    if (interaction.commandName === "status") {
+    if (interaction.commandName === 'status') {
       await handleStatus(interaction);
-    } else if (interaction.commandName === "renew") {
+    } else if (interaction.commandName === 'renew') {
       await handleRenew(interaction);
-    } else if (interaction.commandName === "verify") {
+    } else if (interaction.commandName === 'verify') {
       await handleVerify(interaction);
     }
   } catch (err) {
-    console.error("Command error:", err);
-    try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: "❌ אירעה שגיאה בעת ביצוע הפקודה.",
-          ephemeral: true,
-        });
-      } else {
-        await interaction.followUp({
-          content: "❌ אירעה שגיאה בעת ביצוע הפקודה.",
-          ephemeral: true,
-        });
-      }
-    } catch (e) {
-      console.error("Error sending error reply:", e);
+    console.error('Command error:', err);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '❌ אירעה שגיאה בעת ביצוע הפקודה.',
+        ephemeral: true,
+      });
+    } else {
+      await interaction.followUp({
+        content: '❌ אירעה שגיאה בעת ביצוע הפקודה.',
+        ephemeral: true,
+      });
     }
   }
 });
 
-// /status <service_id>
+// ---------- /status ----------
 async function handleStatus(interaction) {
-  const serviceId = interaction.options.getString("service_id");
+  const serviceId = interaction.options.getString('service_id');
+
   await interaction.deferReply({ ephemeral: true });
 
   if (!serviceId) {
-    await interaction.editReply(
-      "ℹ יש לספק service_id של השרת שברצונך לבדוק."
-    );
+    await interaction.editReply('ℹ אנא ספק service_id של השירות שברצונך לבדוק.');
     return;
   }
 
   const status = await getServiceStatus(serviceId);
-
   if (!status) {
-    await interaction.editReply("❌ לא נמצא שירות עם ה-ID שסיפקת.");
+    await interaction.editReply('❌ לא נמצא שירות עם ה-ID שסיפקת.');
     return;
   }
 
@@ -93,48 +78,38 @@ async function handleStatus(interaction) {
     `🖥 **סטטוס שירות #${status.id}**\n` +
       `שם: **${status.name}**\n` +
       `סטטוס: **${status.status}**\n` +
-      `תאריך חידוש הבא: **${status.nextDueDate || "לא זמין"}**`
+      `תאריך חידוש הבא: **${status.nextDueDate}**`
   );
 }
 
-// /renew <service_id>
+// ---------- /renew ----------
 async function handleRenew(interaction) {
-  const serviceId = interaction.options.getString("service_id");
+  const serviceId = interaction.options.getString('service_id');
+
   await interaction.deferReply({ ephemeral: true });
 
   if (!serviceId) {
-    await interaction.editReply("ℹ יש לספק service_id של השירות לחידוש.");
+    await interaction.editReply('ℹ אנא ספק service_id של השירות שברצונך לחדש.');
     return;
   }
 
   const link = await getRenewLinkByService(serviceId);
-
-  if (!link) {
-    await interaction.editReply(
-      "❌ לא הצלחתי לייצר לינק חידוש עבור השירות הזה."
-    );
-    return;
-  }
 
   await interaction.editReply(
     `🔁 לינק לחידוש מנוי עבור שירות #${serviceId}:\n${link}`
   );
 }
 
-// /verify <email>
+// ---------- /verify ----------
 async function handleVerify(interaction) {
-  const email = interaction.options.getString("email");
-  await interaction.deferReply({ ephemeral: true });
+  const email = interaction.options.getString('email');
 
-  if (!email) {
-    await interaction.editReply("ℹ יש לספק כתובת אימייל.");
-    return;
-  }
+  await interaction.deferReply({ ephemeral: true });
 
   const verifyResult = await verifyClientByEmail(email);
 
   if (!verifyResult || !verifyResult.activeServices.length) {
-    await interaction.editReply("❌ לא נמצאו שירותים פעילים עבור המייל הזה.");
+    await interaction.editReply('❌ לא נמצאו שירותים פעילים עבור המייל הזה.');
     return;
   }
 
