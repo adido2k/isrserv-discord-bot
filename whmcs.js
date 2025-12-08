@@ -125,7 +125,7 @@ function getDeptIdByKey(key) {
 // פתיחת טיקט תמיכה
 // 1. מנסה למצוא clientid לפי האימייל
 // 2. אם נמצא – פותח טיקט על לקוח קיים (clientid בלבד)
-// 3. אם לא – פותח טיקט כאורח עם name + clientemail
+// 3. אם לא – פותח טיקט כאורח עם name + email + clientemail
 // ------------------------------------------------------
 async function openSupportTicket({
   departmentKey = "general",
@@ -175,6 +175,8 @@ async function openSupportTicket({
       message: safeMessage,
       priority,
       clientid: clientId,
+      // אפשר גם להעביר אימייל, אבל זה לא חובה כשיש clientid
+      email,
     });
 
     return {
@@ -184,7 +186,7 @@ async function openSupportTicket({
     };
   }
 
-  // ---- אם הלקוח לא קיים → חובה לשלוח name + clientemail ----
+  // ---- אם הלקוח לא קיים → חובה לשלוח name + email ----
   const name =
     discordUser?.globalName ||
     discordUser?.username ||
@@ -195,7 +197,10 @@ async function openSupportTicket({
     subject: safeSubject,
     message: safeMessage,
     priority,
-    clientemail: email,
+
+    // חשוב ל-WHMCS:
+    email,          // ← זה השדה שהוא בודק
+    clientemail: email, // נשאיר גם את זה לנוחות / תאימות
     name,
   });
 
