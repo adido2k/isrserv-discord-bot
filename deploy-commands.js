@@ -9,7 +9,7 @@ if (!TOKEN || !GUILD_ID) {
   process.exit(1);
 }
 
-// 3 ה-Slash Commands: /status /renew /verify
+// 4 ה-Slash Commands: /status /renew /verify /ticket
 const commands = [
   new SlashCommandBuilder()
     .setName('status')
@@ -39,6 +39,51 @@ const commands = [
         .setName('email')
         .setDescription('האימייל שבו הלקוח רשום ב-WHMCS')
         .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('ticket')
+    .setDescription('פותח טיקט תמיכה ב-WHMCS')
+    .addStringOption((option) =>
+      option
+        .setName('department')
+        .setDescription('מחלקה')
+        .setRequired(true)
+        .addChoices(
+          { name: 'שרתים / Gameservers', value: 'gameservers' },
+          { name: 'חיוב ותשלומים', value: 'billing' },
+          { name: 'Abuse / תלונות', value: 'abuse' },
+          { name: 'תמיכה כללית', value: 'general' },
+        )
+    )
+    .addStringOption((option) =>
+      option
+        .setName('subject')
+        .setDescription('נושא קצר לטיקט')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('email')
+        .setDescription('האימייל שלך ב-isrServ / WHMCS')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('message')
+        .setDescription('תיאור הבעיה / הבקשה שלך')
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName('priority')
+        .setDescription('עדיפות הטיקט')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Low', value: 'Low' },
+          { name: 'Medium', value: 'Medium' },
+          { name: 'High', value: 'High' },
+        )
     ),
 ].map((cmd) => cmd.toJSON());
 
