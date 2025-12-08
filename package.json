@@ -4,11 +4,14 @@
   "description": "Discord bot for isrServ game servers",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "register:commands": "node deploy-commands.js"
   },
   "author": "Adi / isrServ",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^14.13.0"
+    "discord.js": "^14.13.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
   }
 }
