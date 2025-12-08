@@ -5,36 +5,45 @@ require("dotenv").config();
 const { TOKEN, GUILD_ID } = process.env;
 
 if (!TOKEN || !GUILD_ID) {
-  console.error("❌ Missing TOKEN or GUILD_ID in environment variables");
+  console.error("Missing TOKEN or GUILD_ID env vars.");
   process.exit(1);
 }
 
+// מגדירים את 3 ה-Slash Commands עם פרמטרים
 const commands = [
-
+  // /status <service_id>
   new SlashCommandBuilder()
     .setName("status")
-    .setDescription("מציג סטטוס של השרתים שלך"),
+    .setDescription("מציג סטטוס של שרת משחק לפי service_id ב-WHMCS")
+    .addStringOption((option) =>
+      option
+        .setName("service_id")
+        .setDescription("ה-service_id של השרת ב-WHMCS")
+        .setRequired(true)
+    ),
 
+  // /renew <service_id>
   new SlashCommandBuilder()
     .setName("renew")
-    .setDescription("מקבל קישור לחידוש מנוי"),
+    .setDescription("מקבל לינק לחידוש מנוי לשרת לפי service_id")
+    .addStringOption((option) =>
+      option
+        .setName("service_id")
+        .setDescription("ה-service_id של השרת שברצונך לחדש")
+        .setRequired(true)
+    ),
 
+  // /verify <email>
   new SlashCommandBuilder()
     .setName("verify")
-    .setDescription("אימות חשבון וקבלת רולים"),
-
-  new SlashCommandBuilder()
-    .setName("myservers")
-    .setDescription("רשימת כל השרתים שקנית באתר"),
-
-  new SlashCommandBuilder()
-    .setName("help")
-    .setDescription("רשימת כל הפקודות הזמינות"),
-
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("פתיחת טיקט תמיכה"),
-].map((c) => c.toJSON());
+    .setDescription("אימות לקוח לפי אימייל וקבלת רול + בדיקת שירותים פעילים")
+    .addStringOption((option) =>
+      option
+        .setName("email")
+        .setDescription("האימייל של הלקוח ב-WHMCS")
+        .setRequired(true)
+    ),
+].map((cmd) => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -44,13 +53,12 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
 
     const app = await rest.get(Routes.oauth2CurrentApplication());
 
-    await rest.put(
-      Routes.applicationGuildCommands(app.id, GUILD_ID),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationGuildCommands(app.id, GUILD_ID), {
+      body: commands,
+    });
 
     console.log("✅ Slash commands registered successfully.");
-  } catch (err) {
-    console.error("❌ Error:", err);
+  } catch (error) {
+    console.error("❌ Error registering commands:", error);
   }
 })();
