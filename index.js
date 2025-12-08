@@ -1,16 +1,8 @@
-// index.js – isrServ Discord Bot (עם keep-alive ל-Fly.io)
+// index.js – גרסה מלאה ל-Fly.io + Discord + WHMCS
 
-// --------------------------------------------------------
-// 1) שרת קטן כדי ש-Fly.io יראה שהאפליקציה חיה
-// --------------------------------------------------------
-const http = require("http");
-http.createServer((req, res) => res.end("OK")).listen(process.env.PORT || 3000);
-
-// --------------------------------------------------------
-// 2) Discord + WHMCS
-// --------------------------------------------------------
 require("dotenv").config();
 
+const http = require("http");
 const {
   Client,
   GatewayIntentBits,
@@ -25,6 +17,22 @@ const {
   openSupportTicket,
 } = require("./whmcs");
 
+// ─────────────────────────────────────
+// HTTP server בשביל Fly.io (בריאות)
+// ─────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("isrServ Discord bot is running\n");
+  })
+  .listen(PORT, () => {
+    console.log(`HTTP server listening on port ${PORT}`);
+  });
+
+// ─────────────────────────────────────
+// Discord Client
+// ─────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -35,19 +43,16 @@ const client = new Client({
 });
 
 const GUILD_ID = process.env.GUILD_ID;
-const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID; // רול שיקבל לקוח מאומת
+const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
 const CLIENT_AREA_URL = process.env.CLIENT_AREA_URL;
 
-// --------------------------------------------------------
-// 3) Ready
-// --------------------------------------------------------
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// --------------------------------------------------------
-// 4) Slash Commands handler
-// --------------------------------------------------------
+// ─────────────────────────────────────
+// Slash Commands handler
+// ─────────────────────────────────────
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -77,9 +82,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// --------------------------------------------------------
+// ─────────────────────────────────────
 // /status
-// --------------------------------------------------------
+// ─────────────────────────────────────
 async function handleStatus(interaction) {
   const serviceId = interaction.options.getString("service_id");
 
@@ -104,9 +109,9 @@ async function handleStatus(interaction) {
   );
 }
 
-// --------------------------------------------------------
+// ─────────────────────────────────────
 // /renew
-// --------------------------------------------------------
+// ─────────────────────────────────────
 async function handleRenew(interaction) {
   const serviceId = interaction.options.getString("service_id");
 
@@ -124,9 +129,9 @@ async function handleRenew(interaction) {
   );
 }
 
-// --------------------------------------------------------
+// ─────────────────────────────────────
 // /verify
-// --------------------------------------------------------
+// ─────────────────────────────────────
 async function handleVerify(interaction) {
   const email = interaction.options.getString("email");
 
@@ -155,11 +160,11 @@ async function handleVerify(interaction) {
   );
 }
 
-// --------------------------------------------------------
-// /ticket  (תמיכה ל־WHMCS)
-// --------------------------------------------------------
+// ─────────────────────────────────────
+// /ticket
+// ─────────────────────────────────────
 async function handleTicket(interaction) {
-  const department = interaction.options.getString("department"); // gameservers / billing / abuse / general
+  const department = interaction.options.getString("department");
   const subject = interaction.options.getString("subject");
   const email = interaction.options.getString("email");
   const message = interaction.options.getString("message");
@@ -179,7 +184,6 @@ async function handleTicket(interaction) {
     return;
   }
 
-  // נוודא שהבוט לא נתקע – timeout פנימי
   const TIMEOUT_MS = 7000;
 
   let ticket;
@@ -198,10 +202,7 @@ async function handleTicket(interaction) {
       ),
     ]);
   } catch (err) {
-    console.error(
-      "[/ticket] error or timeout:",
-      err?.response?.data || err.message
-    );
+    console.error("[/ticket] error or timeout:", err?.response?.data || err);
 
     await interaction.editReply(
       "❌ לא הצלחנו לפתוח טיקט במערכת WHMCS כרגע. " +
@@ -238,7 +239,9 @@ async function handleTicket(interaction) {
   );
 }
 
-// --------------------------------------------------------
-// 5) Login to Discord
-// --------------------------------------------------------
-client.login(process.env.TOKEN);
+// ─────────────────────────────────────
+// Discord login
+// ─────────────────────────────────────
+client
+  .login(process.env.TOKEN)
+  .catch((err) => console.error("Discord login error:", err));
