@@ -11,6 +11,7 @@ const {
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
+  openSupportTicket,
 } = require('./whmcs');
 
 const client = new Client({
@@ -24,6 +25,7 @@ const client = new Client({
 
 const GUILD_ID = process.env.GUILD_ID;
 const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID; // רול שיקבל לקוח מאומת
+const CLIENT_AREA_URL = process.env.CLIENT_AREA_URL;
 
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -40,6 +42,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleRenew(interaction);
     } else if (interaction.commandName === 'verify') {
       await handleVerify(interaction);
+    } else if (interaction.commandName === 'ticket') {
+      await handleTicket(interaction);
     }
   } catch (err) {
     console.error('Command error:', err);
@@ -126,6 +130,50 @@ async function handleVerify(interaction) {
   await interaction.editReply(
     `✅ נמצא לקוח עם ID ${verifyResult.clientId} ויש לו ${verifyResult.activeServices.length} שירותים פעילים.\n` +
       `הרול המתאים נוסף לך (אם היה מוגדר).`
+  );
+}
+
+// ---------- /ticket ----------
+async function handleTicket(interaction) {
+  const department = interaction.options.getString('department'); // gameservers / billing / abuse / general
+  const subject = interaction.options.getString('subject');
+  const email = interaction.options.getString('email');
+  const message = interaction.options.getString('message');
+  const priority = interaction.options.getString('priority') || 'Medium';
+
+  await interaction.deferReply({ ephemeral: true });
+
+  if (!email) {
+    await interaction.editReply('❌ חובה לציין אימייל כדי שנוכל לחזור אליך.');
+    return;
+  }
+
+  const ticket = await openSupportTicket({
+    departmentKey: department,
+    subject,
+    message,
+    email,
+    priority,
+    discordUser: interaction.user,
+  });
+
+  let linkText = '';
+  if (ticket.tid && ticket.c) {
+    linkText = `\n🔗 צפייה בטיקט: ${CLIENT_AREA_URL}/viewticket.php?tid=${ticket.tid}&c=${ticket.c}`;
+  } else if (CLIENT_AREA_URL) {
+    linkText = `\n🔗 כל הטיקטים שלך: ${CLIENT_AREA_URL}/supporttickets.php`;
+  }
+
+  const deptLabel = {
+    gameservers: 'שרתים / Gameservers',
+    billing: 'חיוב ותשלומים',
+    abuse: 'Abuse / תלונות',
+    general: 'תמיכה כללית',
+  }[department] || 'תמיכה';
+
+  await interaction.editReply(
+    `✅ הטיקט שלך נפתח בהצלחה במחלקת **${deptLabel}**.\n` +
+      `מספר טיקט: **${ticket.tid || ticket.ticketId}**${linkText}`
   );
 }
 
