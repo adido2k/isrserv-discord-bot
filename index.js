@@ -11,7 +11,7 @@ const {
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
-  openSupportTicket,
+  openSupportTicket, // פונקציה לפתיחת טיקט ב-WHMCS (מ-whmcs.js)
 } = require('./whmcs');
 
 const client = new Client({
@@ -31,7 +31,9 @@ client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// טיפול ב-Slash Commands
+// ====================================
+//   טיפול ב-Slash Commands
+// ====================================
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -61,7 +63,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ---------- /status ----------
+// ====================================
+//   /status
+// ====================================
 async function handleStatus(interaction) {
   const serviceId = interaction.options.getString('service_id');
 
@@ -86,7 +90,9 @@ async function handleStatus(interaction) {
   );
 }
 
-// ---------- /renew ----------
+// ====================================
+//   /renew
+// ====================================
 async function handleRenew(interaction) {
   const serviceId = interaction.options.getString('service_id');
 
@@ -104,7 +110,9 @@ async function handleRenew(interaction) {
   );
 }
 
-// ---------- /verify ----------
+// ====================================
+//   /verify
+// ====================================
 async function handleVerify(interaction) {
   const email = interaction.options.getString('email');
 
@@ -133,9 +141,14 @@ async function handleVerify(interaction) {
   );
 }
 
-// ---------- /ticket ----------
+// ====================================
+//   /ticket
+// ====================================
 async function handleTicket(interaction) {
-  const department = interaction.options.getString('department'); // gameservers / billing / abuse / general
+  // department: gameservers / billing / abuse / general (או null)
+  const departmentKey =
+    interaction.options.getString('department') || 'general';
+
   const subject = interaction.options.getString('subject');
   const email = interaction.options.getString('email');
   const message = interaction.options.getString('message');
@@ -143,38 +156,73 @@ async function handleTicket(interaction) {
 
   await interaction.deferReply({ ephemeral: true });
 
+  // בדיקות בסיסיות
   if (!email) {
     await interaction.editReply('❌ חובה לציין אימייל כדי שנוכל לחזור אליך.');
     return;
   }
 
-  const ticket = await openSupportTicket({
-    departmentKey: department,
-    subject,
-    message,
-    email,
-    priority,
-    discordUser: interaction.user,
-  });
+  if (!subject) {
+    await interaction.editReply('❌ חובה לציין נושא לטיקט.');
+    return;
+  }
 
+  if (!message) {
+    await interaction.editReply('❌ חובה לכתוב הודעה לטיקט.');
+    return;
+  }
+
+  console.log(
+    `📨 /ticket from ${interaction.user.tag} | dept=${departmentKey} | subject="${subject}"`
+  );
+
+  let ticket;
+  try {
+    ticket = await openSupportTicket({
+      departmentKey, // gameservers / billing / abuse / general
+      subject,
+      message,
+      email,
+      priority,
+      discordUser: interaction.user,
+    });
+  } catch (err) {
+    console.error('Error in openSupportTicket:', err);
+    await interaction.editReply(
+      '❌ לא הצלחנו לפתוח את הטיקט במערכת. אם זה ממשיך, פנה לצוות התמיכה.'
+    );
+    return;
+  }
+
+  if (!ticket) {
+    await interaction.editReply(
+      '❌ התקבלה תשובה ריקה מ-WHMCS, לא ניתן היה לפתוח טיקט.'
+    );
+    return;
+  }
+
+  // בניית לינק לטיקט
   let linkText = '';
-  if (ticket.tid && ticket.c) {
+  if (ticket.tid && ticket.c && CLIENT_AREA_URL) {
     linkText = `\n🔗 צפייה בטיקט: ${CLIENT_AREA_URL}/viewticket.php?tid=${ticket.tid}&c=${ticket.c}`;
   } else if (CLIENT_AREA_URL) {
     linkText = `\n🔗 כל הטיקטים שלך: ${CLIENT_AREA_URL}/supporttickets.php`;
   }
 
-  const deptLabel = {
-    gameservers: 'שרתים / Gameservers',
-    billing: 'חיוב ותשלומים',
-    abuse: 'Abuse / תלונות',
-    general: 'תמיכה כללית',
-  }[department] || 'תמיכה';
+  const deptLabel =
+    {
+      gameservers: 'שרתים / Gameservers',
+      billing: 'חיוב ותשלומים',
+      abuse: 'Abuse / תלונות',
+      general: 'תמיכה כללית',
+    }[departmentKey] || 'תמיכה';
 
   await interaction.editReply(
     `✅ הטיקט שלך נפתח בהצלחה במחלקת **${deptLabel}**.\n` +
-      `מספר טיקט: **${ticket.tid || ticket.ticketId}**${linkText}`
+      `מספר טיקט: **${ticket.tid || ticket.ticketId || 'לא ידוע'}**${linkText}`
   );
 }
+
+// ====================================
 
 client.login(process.env.TOKEN);
