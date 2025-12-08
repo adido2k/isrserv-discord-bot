@@ -9,7 +9,7 @@ if (!TOKEN || !GUILD_ID) {
   process.exit(1);
 }
 
-// מגדירים את 3 ה־Slash Commands
+// מגדירים את 3 ה-Slash Commands
 const commands = [
   new SlashCommandBuilder()
     .setName("status")
@@ -30,11 +30,10 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
   try {
     console.log("🔄 Registering slash commands...");
 
+    const app = await rest.get(Routes.oauth2CurrentApplication());
+
     await rest.put(
-      Routes.applicationGuildCommands(
-        (await rest.get(Routes.oauth2CurrentApplication())).id,
-        GUILD_ID
-      ),
+      Routes.applicationGuildCommands(app.id, GUILD_ID),
       { body: commands }
     );
 
