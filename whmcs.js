@@ -1,132 +1,78 @@
 // whmcs.js
-require("dotenv").config();
-const axios = require("axios");
+const axios = require('axios');
 
-const {
-  WHMCS_URL,
-  WHMCS_IDENTIFIER,
-  WHMCS_SECRET,
-  WHMCS_ACCESS_KEY,
-  CLIENT_AREA_URL,
-} = process.env;
+const WHMCS_URL        = process.env.WHMCS_URL;        // למשל: https://billing.isrserv.co.il/includes/api.php
+const WHMCS_IDENTIFIER = process.env.WHMCS_IDENTIFIER; // API Identifier
+const WHMCS_SECRET     = process.env.WHMCS_SECRET;     // API Secret
+const WHMCS_ACCESS_KEY = process.env.WHMCS_ACCESS_KEY; // אם מוגדר אצלך (לא חובה בכל התקנות)
 
-if (!WHMCS_URL || !WHMCS_IDENTIFIER || !WHMCS_SECRET) {
-  console.warn(
-    "⚠ WHMCS env vars are missing (WHMCS_URL / WHMCS_IDENTIFIER / WHMCS_SECRET). WHMCS-related commands may fail."
-  );
-}
-
-// פונקציה בסיסית לקריאת WHMCS API
-async function callWhmcsApi(params) {
-  if (!WHMCS_URL) {
-    throw new Error("WHMCS_URL is not defined");
-  }
-
-  const payload = new URLSearchParams({
+async function callWhmcs(action, params = {}) {
+  const data = {
     identifier: WHMCS_IDENTIFIER,
     secret: WHMCS_SECRET,
-    accesskey: WHMCS_ACCESS_KEY || "",
-    responsetype: "json",
+    accesskey: WHMCS_ACCESS_KEY,
+    action,
+    responsetype: 'json',
     ...params,
+  };
+
+  const res = await axios.post(
+    WHMCS_URL,
+    new URLSearchParams(data).toString(),
+    {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    }
+  );
+
+  if (res.data.result !== 'success') {
+    throw new Error(`WHMCS error: ${res.data.message || res.data.result}`);
+  }
+
+  return res.data;
+}
+
+// סטטוס שירות לפי service_id
+async function getServiceStatus(serviceId) {
+  const data = await callWhmcs('GetClientsProducts', {
+    serviceid: serviceId,
   });
 
-  const response = await axios.post(WHMCS_URL, payload);
-  const data = response.data;
-
-  if (!data) throw new Error("Empty response from WHMCS");
-
-  if (data.result && data.result !== "success") {
-    throw new Error(`WHMCS error: ${data.message || data.result}`);
-  }
-
-  return data;
-}
-
-/**
- * getServiceStatus(serviceId)
- * מחזיר מידע על שירות יחיד לפי service_id
- */
-async function getServiceStatus(serviceId) {
-  try {
-    const data = await callWhmcsApi({
-      action: "GetClientsProducts",
-      serviceid: serviceId,
-      limitnum: 1,
-    });
-
-    const product =
-      data.products && data.products.product && data.products.product[0];
-
-    if (!product) return null;
-
-    return {
-      id: product.id,
-      name: product.name,
-      status: product.status,
-      nextDueDate: product.nextduedate,
-    };
-  } catch (err) {
-    console.error("getServiceStatus error:", err.message);
-    return null;
-  }
-}
-
-/**
- * getRenewLinkByService(serviceId)
- * מייצר לינק חידוש סטנדרטי של WHMCS (cart renewals)
- */
-function getRenewLinkByService(serviceId) {
-  if (!CLIENT_AREA_URL) {
-    console.warn("CLIENT_AREA_URL is not defined.");
+  const product = data.products.product?.[0];
+  if (!product) {
     return null;
   }
 
-  // פורמט חידוש קלאסי של WHMCS:
-  // cart.php?a=add&renewals=SERVICEID
-  return `${CLIENT_AREA_URL}/cart.php?a=add&renewals=${encodeURIComponent(
-    serviceId
-  )}`;
+  return {
+    id: product.id,
+    name: product.name,
+    status: product.status, // Active / Suspended / וכו'
+    nextDueDate: product.nextduedate,
+  };
 }
 
-/**
- * verifyClientByEmail(email)
- * מאתר לקוח לפי אימייל + מביא את השירותים הפעילים שלו
- */
+// לינק לחידוש מנוי (פשוט – מפנה לדף השירות באיזור הלקוח)
+async function getRenewLinkByService(serviceId) {
+  return `${process.env.CLIENT_AREA_URL}/clientarea.php?action=productdetails&id=${serviceId}`;
+}
+
+// אימות לפי מייל: מחזיר clientId + רשימת שירותים פעילים
 async function verifyClientByEmail(email) {
-  try {
-    // קודם מביאים את פרטי הלקוח
-    const details = await callWhmcsApi({
-      action: "GetClientsDetails",
-      email,
-      stats: true,
-    });
+  const clientData = await callWhmcs('GetClientsDetails', {
+    email,
+    stats: true,
+  });
 
-    if (!details || !details.clientid) {
-      return { clientId: null, activeServices: [] };
-    }
+  const clientId = clientData.clientid;
 
-    const clientId = details.clientid;
+  const productsData = await callWhmcs('GetClientsProducts', {
+    clientid: clientId,
+    status: 'Active',
+  });
 
-    // מביאים מוצרים של הלקוח
-    const productsData = await callWhmcsApi({
-      action: "GetClientsProducts",
-      clientid: clientId,
-      status: "Active",
-    });
-
-    const active =
-      productsData.products && productsData.products.product
-        ? productsData.products.product
-        : [];
-
-    return {
-      clientId,
-      activeServices: active,
-    };
-  } catch (err) {
-    console.error("verifyClientByEmail error:", err.message);
-    return { clientId: null, activeServices: [] };
-  }
+  return {
+    clientId,
+    activeServices: productsData.products.product || [],
+  };
 }
 
 module.exports = {
