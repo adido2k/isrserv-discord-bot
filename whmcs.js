@@ -1,38 +1,43 @@
-// whmcs.js
+// whmcs.js – גרסה שעובדת דרך discord_api.php (localAPI)
+
+// אין לנו צורך כבר ב-X-Forwarded-For או ב-Identifier/Secret
 const axios = require("axios");
 
-// כתובות ופרטי API
-const WHMCS_URL        = process.env.WHMCS_URL;        // למשל: https://billing.isrserv.co.il/includes/api.php
-const WHMCS_IDENTIFIER = process.env.WHMCS_IDENTIFIER; // API Identifier
-const WHMCS_SECRET     = process.env.WHMCS_SECRET;     // API Secret
-const WHMCS_ACCESS_KEY = process.env.WHMCS_ACCESS_KEY; // אם מוגדר אצלך (לא חובה בכל התקנות)
+// כתובת הפרוקסי ב-WHMCS (לא צריך לשנות כלום כאן)
+const WHMCS_URL = "https://panel.isrserv.com/whmcs/discord_api.php";
 
-// מחלקות תמיכה (ID לפי מה שהגדרת ב-Railway)
+// מחלקות תמיכה (מזהי מחלקות מה-Environment של Railway)
 const SUPPORT_DEPARTMENT_ID          = process.env.SUPPORT_DEPARTMENT_ID;          // כללי
 const SUPPORT_DEPARTMENT_GAMESERVERS = process.env.SUPPORT_DEPARTMENT_GAMESERVERS; // Gameservers
 const SUPPORT_DEPARTMENT_BILLING     = process.env.SUPPORT_DEPARTMENT_BILLING;     // Billing
 const SUPPORT_DEPARTMENT_ABUSE       = process.env.SUPPORT_DEPARTMENT_ABUSE;       // Abuse
 
-// קריאה כללית ל-WHMCS
+// -----------------------------------------------------
+// קריאה כללית ל-WHMCS דרך הפרוקסי (discord_api.php)
+// -----------------------------------------------------
 async function callWhmcs(action, params = {}) {
   const data = {
-    identifier: WHMCS_IDENTIFIER,
-    secret: WHMCS_SECRET,
-    accesskey: WHMCS_ACCESS_KEY,
     action,
-    responsetype: "json",
     ...params,
   };
 
   const res = await axios.post(
     WHMCS_URL,
     new URLSearchParams(data).toString(),
-    { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      timeout: 15000,
+    }
   );
 
-  if (res.data.result !== "success") {
+  if (!res.data || res.data.result !== "success") {
     console.error("WHMCS error response:", res.data);
-    throw new Error(`WHMCS error: ${res.data.message || res.data.result}`);
+    throw new Error(
+      (res.data && (res.data.message || res.data.result)) ||
+        "Unknown WHMCS error"
+    );
   }
 
   return res.data;
@@ -44,7 +49,10 @@ async function getServiceStatus(serviceId) {
     serviceid: serviceId,
   });
 
-  const product = data.products.product?.[0];
+  const product = data.products && data.products.product
+    ? data.products.product[0]
+    : null;
+
   if (!product) return null;
 
   return {
@@ -77,11 +85,11 @@ async function verifyClientByEmail(email) {
 
   return {
     clientId,
-    activeServices: productsData.products.product || [],
+    activeServices: (productsData.products && productsData.products.product) || [],
   };
 }
 
-// ----------------- פתיחת טיקט תמיכה -----------------
+// ----------------- בחירת מחלקת תמיכה -----------------
 function getDeptIdByKey(key) {
   switch (key) {
     case "gameservers":
@@ -96,6 +104,7 @@ function getDeptIdByKey(key) {
   }
 }
 
+// ----------------- פתיחת טיקט תמיכה -----------------
 async function openSupportTicket({
   departmentKey = "general",
   subject,
@@ -126,15 +135,15 @@ async function openSupportTicket({
     name,
   });
 
-  // WHMCS מחזיר בד"כ: tid (מספר ציבורי), id (ID פנימי), ו-c (קוד גישה בלינק)
   return {
-    tid: data.tid,
-    ticketId: data.id,
-    c: data.c,
+    tid: data.tid,       // מספר טיקט ציבורי
+    ticketId: data.id,  // ID פנימי
+    c: data.c,          // קוד גישה ללינק
   };
 }
 
 module.exports = {
+  callWhmcs,
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
