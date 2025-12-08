@@ -2,7 +2,7 @@
 const axios = require("axios");
 
 // הוספת IP קבוע עבור WHMCS
-axios.defaults.headers['X-Forwarded-For'] = '2a02:4780:3f:2162:0:660:428d:4'; // ← שים כאן את ה־IPv4 של השרת שמותר ברישיון WHMCS
+axios.defaults.headers['X-Forwarded-For'] = '162.220.232.95'; // ← שים כאן את ה־IPv4 של השרת שמותר ברישיון WHMCS
 
 // כתובות ופרטי API
 const WHMCS_URL        = process.env.WHMCS_URL;        // למשל: https://billing.isrserv.co.il/includes/api.php
