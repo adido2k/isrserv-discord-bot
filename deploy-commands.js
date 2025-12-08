@@ -1,55 +1,52 @@
 // deploy-commands.js
-const { REST, Routes, SlashCommandBuilder } = require("discord.js");
-require("dotenv").config();
+const { REST, Routes, SlashCommandBuilder } = require('discord.js');
+require('dotenv').config();
 
 const { TOKEN, GUILD_ID } = process.env;
 
 if (!TOKEN || !GUILD_ID) {
-  console.error("Missing TOKEN or GUILD_ID env vars.");
+  console.error('Missing TOKEN or GUILD_ID env vars.');
   process.exit(1);
 }
 
-// מגדירים את 3 ה-Slash Commands עם פרמטרים
+// 3 ה-Slash Commands: /status /renew /verify
 const commands = [
-  // /status <service_id>
   new SlashCommandBuilder()
-    .setName("status")
-    .setDescription("מציג סטטוס של שרת משחק לפי service_id ב-WHMCS")
+    .setName('status')
+    .setDescription('מציג סטטוס של שירות לפי service_id ב-WHMCS')
     .addStringOption((option) =>
       option
-        .setName("service_id")
-        .setDescription("ה-service_id של השרת ב-WHMCS")
+        .setName('service_id')
+        .setDescription('ID של השירות ב-WHMCS')
         .setRequired(true)
     ),
 
-  // /renew <service_id>
   new SlashCommandBuilder()
-    .setName("renew")
-    .setDescription("מקבל לינק לחידוש מנוי לשרת לפי service_id")
+    .setName('renew')
+    .setDescription('קישור לחידוש מנוי לפי service_id')
     .addStringOption((option) =>
       option
-        .setName("service_id")
-        .setDescription("ה-service_id של השרת שברצונך לחדש")
+        .setName('service_id')
+        .setDescription('ID של השירות ב-WHMCS')
         .setRequired(true)
     ),
 
-  // /verify <email>
   new SlashCommandBuilder()
-    .setName("verify")
-    .setDescription("אימות לקוח לפי אימייל וקבלת רול + בדיקת שירותים פעילים")
+    .setName('verify')
+    .setDescription('אימות לקוח לפי אימייל והוספת רול')
     .addStringOption((option) =>
       option
-        .setName("email")
-        .setDescription("האימייל של הלקוח ב-WHMCS")
+        .setName('email')
+        .setDescription('האימייל שבו הלקוח רשום ב-WHMCS')
         .setRequired(true)
     ),
 ].map((cmd) => cmd.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
+const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
   try {
-    console.log("🔄 Registering slash commands...");
+    console.log('🔄 Registering slash commands...');
 
     const app = await rest.get(Routes.oauth2CurrentApplication());
 
@@ -57,8 +54,8 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
       body: commands,
     });
 
-    console.log("✅ Slash commands registered successfully.");
+    console.log('✅ Slash commands registered successfully.');
   } catch (error) {
-    console.error("❌ Error registering commands:", error);
+    console.error('❌ Error registering commands:', error);
   }
 })();
