@@ -1,21 +1,30 @@
-// index.js
-require('dotenv').config();
+// index.js – isrServ Discord Bot (עם keep-alive ל-Fly.io)
+
+// --------------------------------------------------------
+// 1) שרת קטן כדי ש-Fly.io יראה שהאפליקציה חיה
+// --------------------------------------------------------
+const http = require("http");
+http.createServer((req, res) => res.end("OK")).listen(process.env.PORT || 3000);
+
+// --------------------------------------------------------
+// 2) Discord + WHMCS
+// --------------------------------------------------------
+require("dotenv").config();
 
 const {
   Client,
   GatewayIntentBits,
   Partials,
   Events,
-} = require('discord.js');
+} = require("discord.js");
 
 const {
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
   openSupportTicket,
-} = require('./whmcs');
+} = require("./whmcs");
 
-// יצירת לקוח דיסקורד
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -25,47 +34,43 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-// משתנים מסביבת העבודה
 const GUILD_ID = process.env.GUILD_ID;
-const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
+const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID; // רול שיקבל לקוח מאומת
 const CLIENT_AREA_URL = process.env.CLIENT_AREA_URL;
 
+// --------------------------------------------------------
+// 3) Ready
+// --------------------------------------------------------
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 // --------------------------------------------------------
-//                Slash Commands handler
+// 4) Slash Commands handler
 // --------------------------------------------------------
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   try {
-    switch (interaction.commandName) {
-      case 'status':
-        await handleStatus(interaction);
-        break;
-      case 'renew':
-        await handleRenew(interaction);
-        break;
-      case 'verify':
-        await handleVerify(interaction);
-        break;
-      case 'ticket':
-        await handleTicket(interaction);
-        break;
+    if (interaction.commandName === "status") {
+      await handleStatus(interaction);
+    } else if (interaction.commandName === "renew") {
+      await handleRenew(interaction);
+    } else if (interaction.commandName === "verify") {
+      await handleVerify(interaction);
+    } else if (interaction.commandName === "ticket") {
+      await handleTicket(interaction);
     }
   } catch (err) {
-    console.error('Command error:', err);
-
+    console.error("Command error:", err);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: '❌ אירעה שגיאה בעת ביצוע הפקודה.',
+        content: "❌ אירעה שגיאה בעת ביצוע הפקודה.",
         ephemeral: true,
       });
     } else {
       await interaction.followUp({
-        content: '❌ אירעה שגיאה בעת ביצוע הפקודה.',
+        content: "❌ אירעה שגיאה בעת ביצוע הפקודה.",
         ephemeral: true,
       });
     }
@@ -73,41 +78,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // --------------------------------------------------------
-// /status – בודק סטטוס שירות
+// /status
 // --------------------------------------------------------
 async function handleStatus(interaction) {
-  const serviceId = interaction.options.getString('service_id');
+  const serviceId = interaction.options.getString("service_id");
 
   await interaction.deferReply({ ephemeral: true });
 
   if (!serviceId) {
-    return interaction.editReply('ℹ אנא ספק service_id תקין.');
+    await interaction.editReply("ℹ אנא ספק service_id של השירות שברצונך לבדוק.");
+    return;
   }
 
   const status = await getServiceStatus(serviceId);
-
   if (!status) {
-    return interaction.editReply('❌ לא נמצא שירות עם ה-ID שסיפקת.');
+    await interaction.editReply("❌ לא נמצא שירות עם ה-ID שסיפקת.");
+    return;
   }
 
   await interaction.editReply(
     `🖥 **סטטוס שירות #${status.id}**\n` +
-    `שם: **${status.name}**\n` +
-    `סטטוס: **${status.status}**\n` +
-    `תאריך חידוש: **${status.nextDueDate}**`
+      `שם: **${status.name}**\n` +
+      `סטטוס: **${status.status}**\n` +
+      `תאריך חידוש הבא: **${status.nextDueDate}**`
   );
 }
 
 // --------------------------------------------------------
-// /renew – מחזיר לינק לחידוש
+// /renew
 // --------------------------------------------------------
 async function handleRenew(interaction) {
-  const serviceId = interaction.options.getString('service_id');
+  const serviceId = interaction.options.getString("service_id");
 
   await interaction.deferReply({ ephemeral: true });
 
   if (!serviceId) {
-    return interaction.editReply('ℹ אנא ספק service_id תקין.');
+    await interaction.editReply("ℹ אנא ספק service_id של השירות שברצונך לחדש.");
+    return;
   }
 
   const link = await getRenewLinkByService(serviceId);
@@ -118,17 +125,18 @@ async function handleRenew(interaction) {
 }
 
 // --------------------------------------------------------
-// /verify – מאמת לפי מייל ומוסיף רול
+// /verify
 // --------------------------------------------------------
 async function handleVerify(interaction) {
-  const email = interaction.options.getString('email');
+  const email = interaction.options.getString("email");
 
   await interaction.deferReply({ ephemeral: true });
 
   const verifyResult = await verifyClientByEmail(email);
 
   if (!verifyResult || !verifyResult.activeServices.length) {
-    return interaction.editReply('❌ לא נמצאו שירותים פעילים עבור המייל הזה.');
+    await interaction.editReply("❌ לא נמצאו שירותים פעילים עבור המייל הזה.");
+    return;
   }
 
   const guild = await client.guilds.fetch(GUILD_ID);
@@ -142,22 +150,22 @@ async function handleVerify(interaction) {
   }
 
   await interaction.editReply(
-    `✅ נמצא לקוח עם ID ${verifyResult.clientId} ו-${verifyResult.activeServices.length} שירותים פעילים.\n` +
-      `הרול המתאים נוסף לך (אם מוגדר).`
+    `✅ נמצא לקוח עם ID ${verifyResult.clientId} ויש לו ${verifyResult.activeServices.length} שירותים פעילים.\n` +
+      `הרול המתאים נוסף לך (אם היה מוגדר).`
   );
 }
 
 // --------------------------------------------------------
-// /ticket – פתיחת טיקט ב-WHMCS דרך proxy
+// /ticket  (תמיכה ל־WHMCS)
 // --------------------------------------------------------
 async function handleTicket(interaction) {
-  const department = interaction.options.getString('department');
-  const subject = interaction.options.getString('subject');
-  const email = interaction.options.getString('email');
-  const message = interaction.options.getString('message');
-  const priority = interaction.options.getString('priority') || 'Medium';
+  const department = interaction.options.getString("department"); // gameservers / billing / abuse / general
+  const subject = interaction.options.getString("subject");
+  const email = interaction.options.getString("email");
+  const message = interaction.options.getString("message");
+  const priority = interaction.options.getString("priority") || "Medium";
 
-  console.log('[/ticket] received', {
+  console.log("[/ticket] received", {
     user: interaction.user?.id,
     department,
     email,
@@ -167,12 +175,14 @@ async function handleTicket(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
   if (!email) {
-    return interaction.editReply('❌ חובה לספק אימייל.');
+    await interaction.editReply("❌ חובה לציין אימייל כדי שנוכל לחזור אליך.");
+    return;
   }
 
+  // נוודא שהבוט לא נתקע – timeout פנימי
   const TIMEOUT_MS = 7000;
-  let ticket;
 
+  let ticket;
   try {
     ticket = await Promise.race([
       openSupportTicket({
@@ -184,57 +194,51 @@ async function handleTicket(interaction) {
         discordUser: interaction.user,
       }),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Ticket timeout')), TIMEOUT_MS)
+        setTimeout(() => reject(new Error("Ticket timeout")), TIMEOUT_MS)
       ),
     ]);
   } catch (err) {
-    console.error('[/ticket] error or timeout:', err?.response?.data || err.message);
-
-    return interaction.editReply(
-      '❌ לא הצלחנו לפתוח טיקט במערכת. נסה שוב מאוחר יותר.'
+    console.error(
+      "[/ticket] error or timeout:",
+      err?.response?.data || err.message
     );
+
+    await interaction.editReply(
+      "❌ לא הצלחנו לפתוח טיקט במערכת WHMCS כרגע. " +
+        "אפשר לנסות שוב עוד כמה רגעים או לפתוח טיקט ישירות דרך האתר."
+    );
+    return;
   }
 
   if (!ticket) {
-    return interaction.editReply(
-      '❌ לא התקבלה תשובה ממערכת הטיקטים. נסה שוב מאוחר יותר.'
+    await interaction.editReply(
+      "❌ לא התקבלה תשובה ממערכת הטיקטים. נסה שוב מאוחר יותר."
     );
+    return;
   }
 
-  let linkText = '';
+  let linkText = "";
   if (ticket.tid && ticket.c) {
     linkText = `\n🔗 צפייה בטיקט: ${CLIENT_AREA_URL}/viewticket.php?tid=${ticket.tid}&c=${ticket.c}`;
+  } else if (CLIENT_AREA_URL) {
+    linkText = `\n🔗 כל הטיקטים שלך: ${CLIENT_AREA_URL}/supporttickets.php`;
   }
 
-  const deptLabel = {
-    gameservers: 'שרתים / Gameservers',
-    billing: 'חיוב ותשלומים',
-    abuse: 'Abuse / תלונות',
-    general: 'תמיכה כללית',
-  }[department] || 'תמיכה';
+  const deptLabel =
+    {
+      gameservers: "שרתים / Gameservers",
+      billing: "חיוב ותשלומים",
+      abuse: "Abuse / תלונות",
+      general: "תמיכה כללית",
+    }[department] || "תמיכה";
 
   await interaction.editReply(
-    `✅ הטיקט שלך נפתח במחלקת **${deptLabel}**.\n` +
-    `מספר טיקט: **${ticket.tid || ticket.ticketId}**${linkText}`
+    `✅ הטיקט שלך נפתח בהצלחה במחלקת **${deptLabel}**.\n` +
+      `מספר טיקט: **${ticket.tid || ticket.ticketId || "לא ידוע"}**${linkText}`
   );
 }
 
 // --------------------------------------------------------
-//  HTTP SERVER (Fly.io requirement)
-// --------------------------------------------------------
-const express = require("express");
-const app = express();
-
-app.get("/", (req, res) => {
-  res.send("Discord bot is running!");
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🌍 HTTP server running on port ${PORT}`);
-});
-
-// --------------------------------------------------------
-// הפעלת הבוט
+// 5) Login to Discord
 // --------------------------------------------------------
 client.login(process.env.TOKEN);
