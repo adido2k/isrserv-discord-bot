@@ -1,8 +1,4 @@
-// index.js – גרסה מלאה ל-Fly.io + Discord + WHMCS
-
 require("dotenv").config();
-
-const http = require("http");
 const {
   Client,
   GatewayIntentBits,
@@ -17,22 +13,6 @@ const {
   openSupportTicket,
 } = require("./whmcs");
 
-// ─────────────────────────────────────
-// HTTP server בשביל Fly.io (בריאות)
-// ─────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-http
-  .createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("isrServ Discord bot is running\n");
-  })
-  .listen(PORT, () => {
-    console.log(`HTTP server listening on port ${PORT}`);
-  });
-
-// ─────────────────────────────────────
-// Discord Client
-// ─────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -46,15 +26,23 @@ const GUILD_ID = process.env.GUILD_ID;
 const VERIFIED_ROLE_ID = process.env.VERIFIED_ROLE_ID;
 const CLIENT_AREA_URL = process.env.CLIENT_AREA_URL;
 
+// ---- DEBUG: לראות שהבוט באמת עלה ----
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ─────────────────────────────────────
-// Slash Commands handler
-// ─────────────────────────────────────
+// --------------------------------------------------------
+//              Slash Commands handler
+// --------------------------------------------------------
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  console.log(
+    "[Interaction] command:",
+    interaction.commandName,
+    "user:",
+    interaction.user?.id
+  );
 
   try {
     if (interaction.commandName === "status") {
@@ -67,7 +55,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleTicket(interaction);
     }
   } catch (err) {
-    console.error("Command error:", err);
+    console.error("Command error:", err && err.stack ? err.stack : err);
+
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: "❌ אירעה שגיאה בעת ביצוע הפקודה.",
@@ -82,9 +71,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ─────────────────────────────────────
+// --------------------------------------------------------
 // /status
-// ─────────────────────────────────────
+// --------------------------------------------------------
 async function handleStatus(interaction) {
   const serviceId = interaction.options.getString("service_id");
 
@@ -109,9 +98,9 @@ async function handleStatus(interaction) {
   );
 }
 
-// ─────────────────────────────────────
+// --------------------------------------------------------
 // /renew
-// ─────────────────────────────────────
+// --------------------------------------------------------
 async function handleRenew(interaction) {
   const serviceId = interaction.options.getString("service_id");
 
@@ -129,9 +118,9 @@ async function handleRenew(interaction) {
   );
 }
 
-// ─────────────────────────────────────
+// --------------------------------------------------------
 // /verify
-// ─────────────────────────────────────
+// --------------------------------------------------------
 async function handleVerify(interaction) {
   const email = interaction.options.getString("email");
 
@@ -160,9 +149,9 @@ async function handleVerify(interaction) {
   );
 }
 
-// ─────────────────────────────────────
+// --------------------------------------------------------
 // /ticket
-// ─────────────────────────────────────
+// --------------------------------------------------------
 async function handleTicket(interaction) {
   const department = interaction.options.getString("department");
   const subject = interaction.options.getString("subject");
@@ -202,7 +191,10 @@ async function handleTicket(interaction) {
       ),
     ]);
   } catch (err) {
-    console.error("[/ticket] error or timeout:", err?.response?.data || err);
+    console.error(
+      "[/ticket] error or timeout:",
+      err && err.stack ? err.stack : err
+    );
 
     await interaction.editReply(
       "❌ לא הצלחנו לפתוח טיקט במערכת WHMCS כרגע. " +
@@ -239,9 +231,4 @@ async function handleTicket(interaction) {
   );
 }
 
-// ─────────────────────────────────────
-// Discord login
-// ─────────────────────────────────────
-client
-  .login(process.env.TOKEN)
-  .catch((err) => console.error("Discord login error:", err));
+client.login(process.env.TOKEN);
