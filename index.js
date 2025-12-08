@@ -11,7 +11,7 @@ const {
   getServiceStatus,
   getRenewLinkByService,
   verifyClientByEmail,
-  openSupportTicket, // פונקציה לפתיחת טיקט ב-WHMCS (מ-whmcs.js)
+  openSupportTicket,
 } = require('./whmcs');
 
 const client = new Client({
@@ -31,9 +31,9 @@ client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ====================================
-//   טיפול ב-Slash Commands
-// ====================================
+// --------------------------------------------------------
+//             Slash Commands handler
+// --------------------------------------------------------
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -63,9 +63,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ====================================
-//   /status
-// ====================================
+// --------------------------------------------------------
+// /status
+// --------------------------------------------------------
 async function handleStatus(interaction) {
   const serviceId = interaction.options.getString('service_id');
 
@@ -90,9 +90,9 @@ async function handleStatus(interaction) {
   );
 }
 
-// ====================================
-//   /renew
-// ====================================
+// --------------------------------------------------------
+// /renew
+// --------------------------------------------------------
 async function handleRenew(interaction) {
   const serviceId = interaction.options.getString('service_id');
 
@@ -110,9 +110,9 @@ async function handleRenew(interaction) {
   );
 }
 
-// ====================================
-//   /verify
-// ====================================
+// --------------------------------------------------------
+// /verify
+// --------------------------------------------------------
 async function handleVerify(interaction) {
   const email = interaction.options.getString('email');
 
@@ -141,88 +141,83 @@ async function handleVerify(interaction) {
   );
 }
 
-// ====================================
-//   /ticket
-// ====================================
+// --------------------------------------------------------
+// /ticket  (תמיכה ל־WHMCS)
+// --------------------------------------------------------
 async function handleTicket(interaction) {
-  // department: gameservers / billing / abuse / general (או null)
-  const departmentKey =
-    interaction.options.getString('department') || 'general';
-
+  const department = interaction.options.getString('department'); // gameservers / billing / abuse / general
   const subject = interaction.options.getString('subject');
   const email = interaction.options.getString('email');
   const message = interaction.options.getString('message');
   const priority = interaction.options.getString('priority') || 'Medium';
 
+  console.log('[/ticket] received', {
+    user: interaction.user?.id,
+    department,
+    email,
+    priority,
+  });
+
   await interaction.deferReply({ ephemeral: true });
 
-  // בדיקות בסיסיות
   if (!email) {
     await interaction.editReply('❌ חובה לציין אימייל כדי שנוכל לחזור אליך.');
     return;
   }
 
-  if (!subject) {
-    await interaction.editReply('❌ חובה לציין נושא לטיקט.');
-    return;
-  }
-
-  if (!message) {
-    await interaction.editReply('❌ חובה לכתוב הודעה לטיקט.');
-    return;
-  }
-
-  console.log(
-    `📨 /ticket from ${interaction.user.tag} | dept=${departmentKey} | subject="${subject}"`
-  );
+  // נוודא שהבוט לא נתקע – timeout פנימי
+  const TIMEOUT_MS = 7000;
 
   let ticket;
   try {
-    ticket = await openSupportTicket({
-      departmentKey, // gameservers / billing / abuse / general
-      subject,
-      message,
-      email,
-      priority,
-      discordUser: interaction.user,
-    });
+    ticket = await Promise.race([
+      openSupportTicket({
+        departmentKey: department,
+        subject,
+        message,
+        email,
+        priority,
+        discordUser: interaction.user,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Ticket timeout')), TIMEOUT_MS)
+      ),
+    ]);
   } catch (err) {
-    console.error('Error in openSupportTicket:', err);
+    console.error('[/ticket] error or timeout:', err?.response?.data || err.message);
+
     await interaction.editReply(
-      '❌ לא הצלחנו לפתוח את הטיקט במערכת. אם זה ממשיך, פנה לצוות התמיכה.'
+      '❌ לא הצלחנו לפתוח טיקט במערכת WHMCS כרגע. ' +
+        'אפשר לנסות שוב עוד כמה רגעים או לפתוח טיקט ישירות דרך האתר.'
     );
     return;
   }
 
   if (!ticket) {
     await interaction.editReply(
-      '❌ התקבלה תשובה ריקה מ-WHMCS, לא ניתן היה לפתוח טיקט.'
+      '❌ לא התקבלה תשובה ממערכת הטיקטים. נסה שוב מאוחר יותר.'
     );
     return;
   }
 
-  // בניית לינק לטיקט
   let linkText = '';
-  if (ticket.tid && ticket.c && CLIENT_AREA_URL) {
+  if (ticket.tid && ticket.c) {
     linkText = `\n🔗 צפייה בטיקט: ${CLIENT_AREA_URL}/viewticket.php?tid=${ticket.tid}&c=${ticket.c}`;
   } else if (CLIENT_AREA_URL) {
     linkText = `\n🔗 כל הטיקטים שלך: ${CLIENT_AREA_URL}/supporttickets.php`;
   }
 
-  const deptLabel =
-    {
-      gameservers: 'שרתים / Gameservers',
-      billing: 'חיוב ותשלומים',
-      abuse: 'Abuse / תלונות',
-      general: 'תמיכה כללית',
-    }[departmentKey] || 'תמיכה';
+  const deptLabel = {
+    gameservers: 'שרתים / Gameservers',
+    billing: 'חיוב ותשלומים',
+    abuse: 'Abuse / תלונות',
+    general: 'תמיכה כללית',
+  }[department] || 'תמיכה';
 
   await interaction.editReply(
     `✅ הטיקט שלך נפתח בהצלחה במחלקת **${deptLabel}**.\n` +
       `מספר טיקט: **${ticket.tid || ticket.ticketId || 'לא ידוע'}**${linkText}`
   );
 }
-
-// ====================================
 
 client.login(process.env.TOKEN);
