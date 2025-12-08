@@ -5,24 +5,36 @@ require("dotenv").config();
 const { TOKEN, GUILD_ID } = process.env;
 
 if (!TOKEN || !GUILD_ID) {
-  console.error("Missing TOKEN or GUILD_ID env vars.");
+  console.error("❌ Missing TOKEN or GUILD_ID in environment variables");
   process.exit(1);
 }
 
-// מגדירים את 3 ה-Slash Commands
 const commands = [
+
   new SlashCommandBuilder()
     .setName("status")
-    .setDescription("מציג סטטוס של שרתי המשחק"),
+    .setDescription("מציג סטטוס של השרתים שלך"),
 
   new SlashCommandBuilder()
     .setName("renew")
-    .setDescription("קישור לחידוש מנוי לשרת המשחק"),
+    .setDescription("מקבל קישור לחידוש מנוי"),
 
   new SlashCommandBuilder()
     .setName("verify")
-    .setDescription("אימות מנוי וקבלת רולים מתאימים"),
-].map((cmd) => cmd.toJSON());
+    .setDescription("אימות חשבון וקבלת רולים"),
+
+  new SlashCommandBuilder()
+    .setName("myservers")
+    .setDescription("רשימת כל השרתים שקנית באתר"),
+
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("רשימת כל הפקודות הזמינות"),
+
+  new SlashCommandBuilder()
+    .setName("ticket")
+    .setDescription("פתיחת טיקט תמיכה"),
+].map((c) => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -38,7 +50,7 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     );
 
     console.log("✅ Slash commands registered successfully.");
-  } catch (error) {
-    console.error("❌ Error registering commands:", error);
+  } catch (err) {
+    console.error("❌ Error:", err);
   }
 })();
