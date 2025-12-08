@@ -1,70 +1,67 @@
-// whmcs.js – שימוש ב-discord_api.php (localAPI ב-WHMCS)
+// whmcs.js
+// ------------------------------------------------------
+// אינטגרציה בין הבוט ל-WHMCS דרך discord_api.php (localAPI)
+// אין צורך ב-Identifier / Secret בצד של הבוט – הכול נעשה ב-PHP
+// ------------------------------------------------------
 
 const axios = require("axios");
 
-// כתובת ה-proxy ב-WHMCS – אל תיגע בזה
-const WHMCS_URL = "https://panel.isrserv.com/whmcs/discord_api.php";
+// כתובת הפרוקסי ב-WHMCS
+// אם תרצה בעתיד, אפשר להגדיר ENV בשם WHMCS_URL,
+// ואם לא – הוא ישתמש בכתובת הקבועה.
+const WHMCS_URL =
+  process.env.WHMCS_URL ||
+  "https://panel.isrserv.com/whmcs/discord_api.php";
 
-// מחלקות תמיכה מה-env של Fly.io
-const SUPPORT_DEPARTMENT_ID          = process.env.SUPPORT_DEPARTMENT_ID;          // כללי
-const SUPPORT_DEPARTMENT_GAMESERVERS = process.env.SUPPORT_DEPARTMENT_GAMESERVERS; // Gameservers
-const SUPPORT_DEPARTMENT_BILLING     = process.env.SUPPORT_DEPARTMENT_BILLING;     // Billing
-const SUPPORT_DEPARTMENT_ABUSE       = process.env.SUPPORT_DEPARTMENT_ABUSE;       // Abuse
+// מחלקות תמיכה (IDs מה־Environment של Fly / Railway)
+const SUPPORT_DEPARTMENT_ID = process.env.SUPPORT_DEPARTMENT_ID; // כללי
+const SUPPORT_DEPARTMENT_GAMESERVERS =
+  process.env.SUPPORT_DEPARTMENT_GAMESERVERS; // Gameservers
+const SUPPORT_DEPARTMENT_BILLING =
+  process.env.SUPPORT_DEPARTMENT_BILLING; // Billing
+const SUPPORT_DEPARTMENT_ABUSE = process.env.SUPPORT_DEPARTMENT_ABUSE; // Abuse
 
-// -----------------------------------------------------
-// קריאה כללית ל-WHMCS דרך הפרוקסי
-// -----------------------------------------------------
+// ------------------------------------------------------
+// פונקציה כללית לקריאה ל-WHMCS דרך discord_api.php
+// ------------------------------------------------------
 async function callWhmcs(action, params = {}) {
   const data = {
     action,
     ...params,
   };
 
-  console.log("[WHMCS] callWhmcs →", action, "params:", params);
+  const body = new URLSearchParams(data).toString();
 
-  let res;
-  try {
-    res = await axios.post(
-      WHMCS_URL,
-      new URLSearchParams(data).toString(),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        timeout: 15000,
-      }
-    );
-  } catch (err) {
-    console.error("[WHMCS] axios error:", {
-      message: err.message,
-      code: err.code,
-      responseData: err.response && err.response.data,
-    });
-    throw new Error("HTTP error talking to WHMCS: " + err.message);
-  }
-
-  console.log("[WHMCS] raw response:", res.data);
+  const res = await axios.post(WHMCS_URL, body, {
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: 15000,
+  });
 
   if (!res.data || res.data.result !== "success") {
     console.error("WHMCS error response:", res.data);
     throw new Error(
       (res.data && (res.data.message || res.data.result)) ||
-      "Unknown WHMCS error"
+        "Unknown WHMCS error"
     );
   }
 
   return res.data;
 }
 
-// ----------------- סטטוס שירות -----------------
+// ------------------------------------------------------
+// סטטוס שירות לפי serviceid
+// ------------------------------------------------------
 async function getServiceStatus(serviceId) {
   const data = await callWhmcs("GetClientsProducts", {
     serviceid: serviceId,
   });
 
-  const product = data.products && data.products.product
-    ? data.products.product[0]
-    : null;
+  const product =
+    data.products && data.products.product
+      ? data.products.product[0]
+      : null;
 
   if (!product) return null;
 
@@ -76,12 +73,17 @@ async function getServiceStatus(serviceId) {
   };
 }
 
-// ----------------- לינק לחידוש -----------------
+// ------------------------------------------------------
+// לינק לחידוש שירות (clientarea)
+// ------------------------------------------------------
 async function getRenewLinkByService(serviceId) {
+  // משתמש ב-CLIENT_AREA_URL שמוגדר ב-ENV
   return `${process.env.CLIENT_AREA_URL}/clientarea.php?action=productdetails&id=${serviceId}`;
 }
 
-// ----------------- אימות לקוח לפי מייל -----------------
+// ------------------------------------------------------
+// אימות לקוח לפי מייל – מחזיר clientId + שירותים פעילים
+// ------------------------------------------------------
 async function verifyClientByEmail(email) {
   const clientData = await callWhmcs("GetClientsDetails", {
     email,
@@ -102,7 +104,9 @@ async function verifyClientByEmail(email) {
   };
 }
 
-// ----------------- בחירת מחלקת תמיכה -----------------
+// ------------------------------------------------------
+// בחירת מחלקת תמיכה לפי המפתח מהפקודה (/ticket department)
+// ------------------------------------------------------
 function getDeptIdByKey(key) {
   switch (key) {
     case "gameservers":
@@ -117,7 +121,12 @@ function getDeptIdByKey(key) {
   }
 }
 
-// ----------------- פתיחת טיקט -----------------
+// ------------------------------------------------------
+// פתיחת טיקט תמיכה
+// 1. מנסה למצוא clientid לפי האימייל
+// 2. אם נמצא – פותח טיקט על לקוח קיים (clientid בלבד)
+// 3. אם לא – פותח טיקט כאורח עם name + clientemail
+// ------------------------------------------------------
 async function openSupportTicket({
   departmentKey = "general",
   subject,
@@ -136,15 +145,50 @@ async function openSupportTicket({
   });
 
   const safeSubject =
-    subject || `פניה מ-Discord (${departmentKey || "general"})`;
-
+    subject || `פניה מ־Discord (${departmentKey || "general"})`;
   const safeMessage =
     message ||
     "פניה נפתחה דרך הבוט בדיסקורד (לא סופק טקסט הודעה מפורט).";
 
-  const name = discordUser
-    ? `${discordUser.username}#${discordUser.discriminator}`
-    : "Discord User";
+  // ---- שלב 1: לבדוק אם המייל שייך ללקוח קיים ----
+  let clientId = null;
+  try {
+    const c = await callWhmcs("GetClientsDetails", {
+      email,
+      stats: false,
+    });
+    if (c && c.clientid) {
+      clientId = c.clientid;
+      console.log("[WHMCS] found existing clientId:", clientId);
+    }
+  } catch (e) {
+    console.log(
+      "[WHMCS] email not found as existing client, opening ticket as guest"
+    );
+  }
+
+  // ---- אם הלקוח קיים → פותחים טיקט עם clientid בלבד ----
+  if (clientId) {
+    const data = await callWhmcs("OpenTicket", {
+      deptid,
+      subject: safeSubject,
+      message: safeMessage,
+      priority,
+      clientid: clientId,
+    });
+
+    return {
+      tid: data.tid,
+      ticketId: data.id,
+      c: data.c,
+    };
+  }
+
+  // ---- אם הלקוח לא קיים → חובה לשלוח name + clientemail ----
+  const name =
+    discordUser?.globalName ||
+    discordUser?.username ||
+    "Discord User";
 
   const data = await callWhmcs("OpenTicket", {
     deptid,
@@ -162,6 +206,9 @@ async function openSupportTicket({
   };
 }
 
+// ------------------------------------------------------
+// ייצוא הפונקציות לשימוש ב-index.js
+// ------------------------------------------------------
 module.exports = {
   callWhmcs,
   getServiceStatus,
