@@ -1,20 +1,30 @@
 // whmcs.js
 // ------------------------------------------------------
 // אינטגרציה בין הבוט ל-WHMCS דרך discord_api.php (localAPI)
-// אין צורך ב-IP, רק בכתובת HTTPS עובדת.
+// כולל טיפול ב-self-signed certificate (לצורכי בדיקות – לא מומלץ לפרודקשן).
 // ------------------------------------------------------
 
 const axios = require("axios");
+const https = require("https");
+
+// האם לאפשר self-signed certificate
+// אם תרצה לכבות בעתיד: שנה ל-false או השתמש ב-ENV
+const ALLOW_SELF_SIGNED =
+  process.env.ALLOW_SELF_SIGNED_SSL === "1" || true;
+
+// Agent שמתעלם מהבדיקת תעודה כשצריך
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: !ALLOW_SELF_SIGNED,
+});
 
 // כתובת הפרוקסי ב-WHMCS
-// אם תגדיר ENV בשם WHMCS_URL – הוא ישתמש בו.
-// אחרת הוא ישתמש בכתובת הקבועה למטה.
 const WHMCS_URL =
   process.env.WHMCS_URL ||
   "https://panel.isrserv.com/whmcs/discord_api.php";
 
-// מחלקות תמיכה (IDs מה־WHMCS שלך)
-const SUPPORT_DEPARTMENT_ID = process.env.SUPPORT_DEPARTMENT_ID || 1; // כללי
+// מחלקות תמיכה (IDs ב-WHMCS, תעדכן אם צריך)
+const SUPPORT_DEPARTMENT_ID =
+  process.env.SUPPORT_DEPARTMENT_ID || 1; // כללי
 const SUPPORT_DEPARTMENT_GAMESERVERS =
   process.env.SUPPORT_DEPARTMENT_GAMESERVERS || 2; // Gameservers
 const SUPPORT_DEPARTMENT_BILLING =
@@ -22,7 +32,9 @@ const SUPPORT_DEPARTMENT_BILLING =
 const SUPPORT_DEPARTMENT_ABUSE =
   process.env.SUPPORT_DEPARTMENT_ABUSE || 4; // Abuse
 
-// פונקציית בסיס ששולחת בקשות ל-discord_api.php
+// ------------------------------------------------------
+// פונקציה כללית שקוראת ל-discord_api.php
+// ------------------------------------------------------
 async function callWhmcs(action, params = {}) {
   try {
     const body = new URLSearchParams({ action, ...params });
@@ -32,6 +44,7 @@ async function callWhmcs(action, params = {}) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       timeout: 15000,
+      httpsAgent,
     });
 
     if (!res.data) {
@@ -44,13 +57,13 @@ async function callWhmcs(action, params = {}) {
 
     return res.data;
   } catch (err) {
-    console.error("[WHMCS] callWhmcs error:", err.message);
+    console.error("[WHMCS] error or timeout:", err.message);
     throw err;
   }
 }
 
 // ------------------------------------------------------
-// פתיחת טיקט חדש
+// פונקציה בסיסית לפתיחת טיקט
 // ------------------------------------------------------
 async function openTicket({
   name,
@@ -60,10 +73,9 @@ async function openTicket({
   priority = "Medium",
   department = "general",
 }) {
-  // ממפה שם מחלקה ל-ID
   let deptId = SUPPORT_DEPARTMENT_ID;
 
-  switch (department) {
+  switch (department.toLowerCase()) {
     case "games":
     case "gameservers":
       deptId = SUPPORT_DEPARTMENT_GAMESERVERS;
@@ -74,6 +86,7 @@ async function openTicket({
     case "abuse":
       deptId = SUPPORT_DEPARTMENT_ABUSE;
       break;
+    // ברירת מחדל – כללי
   }
 
   const data = await callWhmcs("OpenTicket", {
@@ -85,12 +98,19 @@ async function openTicket({
     priority,
   });
 
-  return data; // צפוי לכלול ticketid וכו'
+  return data;
 }
 
 // ------------------------------------------------------
-// דוגמה לפונקציה להבאת פרטי לקוח לפי מייל
-// (אם תרצה להרחיב אינטגרציה בהמשך)
+// wrapper בשם openSupportTicket כדי להתאים לקוד הקיים בבוט
+// ------------------------------------------------------
+async function openSupportTicket(options) {
+  // options צפוי להיות אובייקט { name, email, subject, message, priority, department }
+  return openTicket(options);
+}
+
+// ------------------------------------------------------
+// פונקציה לדוגמה – קבלת פרטי לקוח לפי אימייל
 // ------------------------------------------------------
 async function getClientByEmail(email) {
   const data = await callWhmcs("GetClientsDetails", {
@@ -101,7 +121,8 @@ async function getClientByEmail(email) {
   return data;
 }
 
+// מה נייצא לקבצים אחרים (index.js וכו')
 module.exports = {
-  openTicket,
+  openSupportTicket,
   getClientByEmail,
 };
