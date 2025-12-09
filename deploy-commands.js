@@ -1,109 +1,133 @@
 // deploy-commands.js
+// רישום Slash Commands לדיסקורד – רק לשרת אחד (GUILD_ID)
+// וגם ניקוי כל הפקודות הגלובליות כדי שלא יהיו כפילויות.
+
 const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 require("dotenv").config();
 
 const { TOKEN, GUILD_ID } = process.env;
 
 if (!TOKEN || !GUILD_ID) {
-  console.error("Missing TOKEN or GUILD_ID env vars.");
+  console.error("❌ Missing TOKEN or GUILD_ID env vars.");
   process.exit(1);
 }
 
-// כל ה-Slash Commands של הבוט
+// ---------------------------------------------------------------------
+// הגדרת כל ה־Slash Commands של הבוט
+// ---------------------------------------------------------------------
+
+// /status
+const statusCommand = new SlashCommandBuilder()
+  .setName("status")
+  .setDescription("בדיקת סטטוס של שירות ב-WHMCS לפי service_id")
+  .addStringOption((option) =>
+    option
+      .setName("service_id")
+      .setDescription("מספר השירות (service_id) מתוך WHMCS")
+      .setRequired(true)
+  );
+
+// /renew
+const renewCommand = new SlashCommandBuilder()
+  .setName("renew")
+  .setDescription("קבלת לינק לחידוש שירות ב-WHMCS לפי service_id")
+  .addStringOption((option) =>
+    option
+      .setName("service_id")
+      .setDescription("מספר השירות (service_id) מתוך WHMCS")
+      .setRequired(true)
+  );
+
+// /verify
+const verifyCommand = new SlashCommandBuilder()
+  .setName("verify")
+  .setDescription("אימות לקוח לפי כתובת מייל והוספת רול מאומת")
+  .addStringOption((option) =>
+    option
+      .setName("email")
+      .setDescription("האימייל הרשום בחשבון הלקוח ב-WHMCS")
+      .setRequired(true)
+  );
+
+// /ticket
+const ticketCommand = new SlashCommandBuilder()
+  .setName("ticket")
+  .setDescription("פתיחת טיקט תמיכה ב-WHMCS")
+  .addStringOption((option) =>
+    option
+      .setName("department")
+      .setDescription("מחלקת התמיכה")
+      .setRequired(true)
+      .addChoices(
+        { name: "תמיכה כללית", value: "general" },
+        { name: "שרתים / Gameservers", value: "gameservers" },
+        { name: "חיוב ותשלומים", value: "billing" },
+        { name: "Abuse / תלונות", value: "abuse" }
+      )
+  )
+  .addStringOption((option) =>
+    option
+      .setName("subject")
+      .setDescription("נושא הטיקט")
+      .setRequired(false)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("email")
+      .setDescription("האימייל שבו תרצה שנחזור אליך")
+      .setRequired(true)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("message")
+      .setDescription("תיאור הבעיה / הפניה")
+      .setRequired(false)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("priority")
+      .setDescription("עדיפות הטיקט")
+      .setRequired(false)
+      .addChoices(
+        { name: "Low", value: "Low" },
+        { name: "Medium", value: "Medium" },
+        { name: "High", value: "High" }
+      )
+  );
+
+// כל הפקודות כ־JSON
 const commands = [
-  // /status
-  new SlashCommandBuilder()
-    .setName("status")
-    .setDescription("מציג סטטוס של שירות לפי service_id ב-WHMCS")
-    .addStringOption((opt) =>
-      opt
-        .setName("service_id")
-        .setDescription("ה-ID של השירות ב-WHMCS")
-        .setRequired(true)
-    ),
-
-  // /renew
-  new SlashCommandBuilder()
-    .setName("renew")
-    .setDescription("קישור לחידוש מנוי עבור שירות")
-    .addStringOption((opt) =>
-      opt
-        .setName("service_id")
-        .setDescription("ה-ID של השירות ב-WHMCS")
-        .setRequired(true)
-    ),
-
-  // /verify
-  new SlashCommandBuilder()
-    .setName("verify")
-    .setDescription("אימות לקוח לפי מייל והוספת רול מאומת")
-    .addStringOption((opt) =>
-      opt
-        .setName("email")
-        .setDescription("האימייל של הלקוח ב-WHMCS")
-        .setRequired(true)
-    ),
-
-  // /ticket – פתיחת טיקט תמיכה
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("פתיחת טיקט תמיכה ב-WHMCS")
-    .addStringOption((opt) =>
-      opt
-        .setName("department")
-        .setDescription("מחלקה")
-        .addChoices(
-          { name: "Gameservers", value: "gameservers" },
-          { name: "Billing / תשלומים", value: "billing" },
-          { name: "Abuse / תלונות", value: "abuse" },
-          { name: "General / כללי", value: "general" }
-        )
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("subject")
-        .setDescription("נושא הטיקט")
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("message")
-        .setDescription("תוכן הפניה")
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("email")
-        .setDescription("אימייל ליצירת קשר (חייב להיות כמו ב-WHMCS אם קיים לקוח)")
-        .setRequired(true)
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("priority")
-        .setDescription("עדיפות")
-        .addChoices(
-          { name: "Low", value: "Low" },
-          { name: "Medium", value: "Medium" },
-          { name: "High", value: "High" }
-        )
-        .setRequired(false)
-    ),
+  statusCommand,
+  renewCommand,
+  verifyCommand,
+  ticketCommand,
 ].map((cmd) => cmd.toJSON());
+
+// ---------------------------------------------------------------------
+// רישום הפקודות
+// ---------------------------------------------------------------------
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
   try {
-    console.log("🔄 Registering slash commands...");
+    console.log("🔄 Registering slash commands…");
 
+    // מזהה האפליקציה (הבוט)
     const app = await rest.get(Routes.oauth2CurrentApplication());
+    const appId = app.id;
 
-    await rest.put(Routes.applicationGuildCommands(app.id, GUILD_ID), {
+    // 1. ניקוי כל ה־Slash Commands הגלובליים כדי שלא יהיו כפילויות
+    console.log("🧹 Clearing GLOBAL commands…");
+    await rest.put(Routes.applicationCommands(appId), { body: [] });
+    console.log("✅ Global commands cleared.");
+
+    // 2. רישום הפקודות רק לשרת הספציפי
+    console.log(`📥 Registering GUILD commands for guild ${GUILD_ID}…`);
+    await rest.put(Routes.applicationGuildCommands(appId, GUILD_ID), {
       body: commands,
     });
-
-    console.log("✅ Slash commands registered successfully.");
+    console.log("✅ Guild commands registered successfully.");
   } catch (error) {
     console.error("❌ Error registering commands:", error);
   }
