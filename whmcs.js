@@ -11,7 +11,7 @@ const axios = require("axios");
 // ואם לא – הוא ישתמש בכתובת הקבועה.
 const WHMCS_URL =
   process.env.WHMCS_URL ||
-  "https://panel.isrserv.com/whmcs/discord_api.php";
+  "https://panel.isrserv.com/panel/whmcs/discord_api.php";
 
 // מחלקות תמיכה (IDs מה־Environment של Railway)
 const SUPPORT_DEPARTMENT_ID = process.env.SUPPORT_DEPARMENT_ID; // General
