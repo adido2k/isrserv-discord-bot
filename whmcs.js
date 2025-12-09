@@ -17,20 +17,27 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: !ALLOW_SELF_SIGNED,
 });
 
-// כתובת הפרוקסי ב-WHMCS
+// כתובת הפרוקסי ב-WHMCS (discord_api.php)
 const WHMCS_URL =
   process.env.WHMCS_URL ||
   "https://panel.isrserv.com/whmcs/discord_api.php";
 
-// מחלקות תמיכה (IDs ב-WHMCS, תעדכן אם צריך)
-const SUPPORT_DEPARTMENT_ID =
-  process.env.SUPPORT_DEPARTMENT_ID || 1; // כללי
+// ------------------------------------------------------
+// מחלקות תמיכה (IDs ב-WHMCS) – לפי המיפוי ששלחת:
+// General Enquiries      = 1
+// isrSupport             = 2  (כרגע לא בשימוש בבוט)
+// Game Servers Support   = 3
+// Billing & Payments     = 4
+// Abuse / Reports        = 5
+// ------------------------------------------------------
+const SUPPORT_DEPARTMENT_GENERAL =
+  process.env.SUPPORT_DEPARTMENT_GENERAL || 1; // General Enquiries
 const SUPPORT_DEPARTMENT_GAMESERVERS =
-  process.env.SUPPORT_DEPARTMENT_GAMESERVERS || 2; // Gameservers
+  process.env.SUPPORT_DEPARTMENT_GAMESERVERS || 3; // Game Servers Support
 const SUPPORT_DEPARTMENT_BILLING =
-  process.env.SUPPORT_DEPARTMENT_BILLING || 3; // Billing
+  process.env.SUPPORT_DEPARTMENT_BILLING || 4; // Billing & Payments
 const SUPPORT_DEPARTMENT_ABUSE =
-  process.env.SUPPORT_DEPARTMENT_ABUSE || 4; // Abuse
+  process.env.SUPPORT_DEPARTMENT_ABUSE || 5; // Abuse / Reports
 
 // ------------------------------------------------------
 // פונקציה כללית שקוראת ל-discord_api.php
@@ -73,20 +80,25 @@ async function openTicket({
   priority = "Medium",
   department = "general",
 }) {
-  let deptId = SUPPORT_DEPARTMENT_ID;
+  // ברירת מחדל – מחלקה כללית
+  let deptId = SUPPORT_DEPARTMENT_GENERAL;
 
   switch (department.toLowerCase()) {
     case "games":
     case "gameservers":
       deptId = SUPPORT_DEPARTMENT_GAMESERVERS;
       break;
+
     case "billing":
       deptId = SUPPORT_DEPARTMENT_BILLING;
       break;
+
     case "abuse":
       deptId = SUPPORT_DEPARTMENT_ABUSE;
       break;
-    // ברירת מחדל – כללי
+
+    // אפשר להוסיף כאן case "support": deptId = 2; אם תרצה בעתיד
+    // אחרת – נשארים על הכללי (1)
   }
 
   const data = await callWhmcs("OpenTicket", {
